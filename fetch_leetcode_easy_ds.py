@@ -2,6 +2,7 @@ import csv
 import time
 import requests
 
+LEETCODE_HOME = "https://leetcode.com/"
 LEETCODE_GRAPHQL = "https://leetcode.com/graphql/"
 
 QUERY = r"""
@@ -26,31 +27,39 @@ query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $fi
 }
 """
 
-def fetch_all_easy_questions(
-    category_slug="",
-    include_paid=True,
-    limit=100,
-    sleep_sec=0.2,
-):
+def fetch_all_easy_questions(include_paid=True, limit=100, sleep_sec=0.2):
+    session = requests.Session()
+
+    # 关键：先访问主页拿到 csrftoken 等 cookie
+    home_headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    r0 = session.get(LEETCODE_HOME, headers=home_headers, timeout=30)
+    r0.raise_for_status()
+
+    csrftoken = session.cookies.get("csrftoken", "")
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://leetcode.com/problemset/all/",
+        "Origin": "https://leetcode.com",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-CSRFToken": csrftoken,
+        "X-Requested-With": "XMLHttpRequest",
+    }
+
     all_rows = []
     skip = 0
     total = None
 
-    session = requests.Session()
-    headers = {
-        "Content-Type": "application/json",
-        "Referer": "https://leetcode.com/problemset/all/",
-        "User-Agent": "Mozilla/5.0",
-    }
-
     while True:
         variables = {
-            "categorySlug": category_slug,
+            "categorySlug": "",
             "limit": limit,
             "skip": skip,
             "filters": {
                 "difficulty": "EASY",
-                # 关键：不要再写 tags 过滤
             },
         }
 
@@ -61,8 +70,8 @@ def fetch_all_easy_questions(
             timeout=30,
         )
         resp.raise_for_status()
-        data = resp.json()
 
+        data = resp.json()
         if "errors" in data:
             raise RuntimeError(f"GraphQL errors: {data['errors']}")
 
@@ -88,24 +97,16 @@ def fetch_all_easy_questions(
             })
 
         skip += limit
-        if skip >= total:
+        if total is not None and skip >= total:
             break
-
         time.sleep(sleep_sec)
 
-    # 题号去重 + 按题号排序
-    uniq = {}
-    for r in all_rows:
-        uniq[r["id"]] = r
+    uniq = {r["id"]: r for r in all_rows}
     rows = sorted(uniq.values(), key=lambda x: int(x["id"]))
-
-    return rows
+    return rows, (total or 0)
 
 if __name__ == "__main__":
-    rows = fetch_all_easy_questions(
-        include_paid=True,  # 付费题也保留
-        limit=100,
-    )
+    rows, total_from_api = fetch_all_easy_questions(include_paid=True, limit=100)
 
     out_csv = "leetcode_easy_all.csv"
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
@@ -114,7 +115,8 @@ if __name__ == "__main__":
         w.writerows(rows)
 
     ids = [r["id"] for r in rows]
-    print(f"Total EASY: {len(rows)}")
+    print(f"Total EASY (api reported): {total_from_api}")
+    print(f"Total EASY (exported rows): {len(rows)}")
     print("Problem IDs:")
     print(",".join(ids))
     print(f"\nSaved: {out_csv}")
