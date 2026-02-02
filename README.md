@@ -21,3 +21,6 @@ The script is written in Python and can be used as a starting point if you later
 
 - leetcode_easy_all.csv
 - A printed list of problem IDs in the terminal
+
+## Progress
+https://docs.google.com/spreadsheets/d/1-1NN2xh6dPEsXINubiMk4AkQZafR-P-Z1P27Lgk10kc/edit?usp=sharing
