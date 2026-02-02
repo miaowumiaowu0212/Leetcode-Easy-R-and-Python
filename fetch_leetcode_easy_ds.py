@@ -26,17 +26,12 @@ query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $fi
 }
 """
 
-def fetch_all_easy_ds_questions(
-    tag_slugs,
+def fetch_all_easy_questions(
     category_slug="",
-    include_paid=False,
-    limit=50,
+    include_paid=True,
+    limit=100,
     sleep_sec=0.2,
 ):
-    """
-    tag_slugs: 例如 ["pandas", "database", "probability-and-statistics"]
-    include_paid: False 则去掉付费题
-    """
     all_rows = []
     skip = 0
     total = None
@@ -55,7 +50,7 @@ def fetch_all_easy_ds_questions(
             "skip": skip,
             "filters": {
                 "difficulty": "EASY",
-                "tags": tag_slugs,   # 关键：按 topic tag slug 过滤
+                # 关键：不要再写 tags 过滤
             },
         }
 
@@ -95,9 +90,10 @@ def fetch_all_easy_ds_questions(
         skip += limit
         if skip >= total:
             break
+
         time.sleep(sleep_sec)
 
-    # 去重（有时不同 tag 组合可能出现重复）
+    # 题号去重 + 按题号排序
     uniq = {}
     for r in all_rows:
         uniq[r["id"]] = r
@@ -106,26 +102,19 @@ def fetch_all_easy_ds_questions(
     return rows
 
 if __name__ == "__main__":
-    # 你可以在这里改成你认定“统计/数据科学相关”的 tags
-    # 这些 slug 在 LeetCode 的 topic list 里对应：pandas / database / probability-and-statistics
-    TAGS = ["pandas", "database", "probability-and-statistics"]
-
-    rows = fetch_all_easy_ds_questions(
-        tag_slugs=TAGS,
-        include_paid=False,
-        limit=50,
+    rows = fetch_all_easy_questions(
+        include_paid=True,  # 付费题也保留
+        limit=100,
     )
 
-    # 1) 输出 csv
-    out_csv = "leetcode_easy_ds.csv"
+    out_csv = "leetcode_easy_all.csv"
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["id", "title", "difficulty", "acRate", "paidOnly", "url", "tags"])
         w.writeheader()
         w.writerows(rows)
 
-    # 2) 输出“题号代码”（题号列表）
     ids = [r["id"] for r in rows]
-    print(f"Total matched: {len(rows)}")
+    print(f"Total EASY: {len(rows)}")
     print("Problem IDs:")
     print(",".join(ids))
     print(f"\nSaved: {out_csv}")
